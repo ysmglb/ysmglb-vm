@@ -66,7 +66,7 @@ jobs:
         run: |
           set -o pipefail
           chmod +x build/build-deps.sh
-          bash build/build-deps.sh 2>&1 | tee deps.log
+          bash build/build-deps.sh 2>&1 | stdbuf -oL tee deps.log
 
       - name: DEP 进度标记
         if: always()
@@ -109,13 +109,18 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout --orphan ci-failure-latest
           git rm -rf . >/dev/null 2>&1 || true
-          cat deps.log > deps.log  # 如果存在
+          # deps.log 是未跟踪文件, git rm -rf 不会删它
           echo "HEAD_SHA=${GITHUB_SHA}" > FAIL.md
           echo "RUN_URL=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> FAIL.md
-          echo "===== LAST 80 LINES =====" >> FAIL.md
-          tail -80 deps.log >> FAIL.md 2>/dev/null || true
-          echo "===== ==DEP== MARKERS =====" >> FAIL.md
-          grep "==DEP==" deps.log >> FAIL.md 2>/dev/null || true
+          if [ -s deps.log ]; then
+            echo "===== LAST 80 LINES =====" >> FAIL.md
+            tail -80 deps.log >> FAIL.md
+            echo "===== ==DEP== MARKERS =====" >> FAIL.md
+            grep "==DEP==" deps.log >> FAIL.md || true
+          else
+            echo "deps.log empty or missing!" >> FAIL.md
+            ls -la >> FAIL.md
+          fi
           git add FAIL.md deps.log 2>/dev/null || git add FAIL.md
           git commit -m "CI failure log: $(date -u +%H:%M) from ${GITHUB_SHA:0:7}"
           git push --force origin HEAD:ci-failure-latest
