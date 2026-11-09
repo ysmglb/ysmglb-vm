@@ -109,7 +109,10 @@ make -j"$(nproc)" qemu-system-aarch64
 # ---- 4. 打包进工程 ----
 OUT="$ROOT/app/src/main/jniLibs/arm64-v8a"
 mkdir -p "$OUT"
-cp -f qemu-system-aarch64 "$OUT/libqemu.so"
+# QEMU 9.x 用 meson, 产物在 build/ 下 (不是源码根目录)
+BIN=build/qemu-system-aarch64
+[ -f "$BIN" ] || BIN=qemu-system-aarch64
+cp -f "$BIN" "$OUT/libqemu.so"
 "$TC/bin/llvm-strip" "$OUT/libqemu.so" 2>/dev/null || true
 echo
 echo "完成 → $OUT/libqemu.so"
