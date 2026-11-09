@@ -20,8 +20,8 @@
 # =====================================================================
 set -euo pipefail
 
-BRANCH="aosp-main"
-TARGET="aosp_cf_arm64_phone-trunk_staging-userdebug"
+BRANCH="aosp-android-latest-release"
+TARGET="aosp_cf_arm64_only_phone-userdebug"
 BUILD_ID=""
 PUSH=0
 LIST_ONLY=0
@@ -29,7 +29,8 @@ LIST_ONLY=0
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/images-download"
 WORK="$OUT/.work"
-WANTED=(kernel ramdisk.img system.img vendor.img)
+# 新版 Cuttlefish 构建把系统镜像打成 img-<build>.zip, kernel/ramdisk 在 boot.zip 里
+WANTED=(kernel ramdisk.img system.img vendor.img product.img)
 PKG_NAME="com.a23.vmm"
 
 log()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
@@ -65,26 +66,12 @@ resolve_latest() {
 
   printf '%s' "$json" | python3 -c '
 import json, sys
-target = sys.argv[1]
+want = sys.argv[1]
 data = json.load(sys.stdin)
-hits = []
-def walk(node):
-    if isinstance(node, dict):
-        t = str(node.get("target", ""))
-        b = node.get("buildId") or node.get("build_id")
-        if b and target in t:
-            hits.append((t, str(b)))
-        for v in node.values():
-            walk(v)
-    elif isinstance(node, list):
-        for v in node:
-            walk(v)
-walk(data)
-seen, out = set(), []
-for t, b in hits:
-    if b not in seen:
-        seen.add(b); out.append(b)
-print("\n".join(out[:1]))
+for t in data.get("targets") or []:
+    if t.get("name") == want:
+        print(t.get("last_known_good_build") or "")
+        break
 ' "$TARGET"
 }
 
@@ -94,40 +81,53 @@ if [ -z "$BUILD_ID" ]; then
   [ -n "$BUILD_ID" ] || die "自动解析失败, 请用 --build <BuildID>"
 fi
 log "构建: $TARGET @ $BUILD_ID"
-BASE="${PAGE_URL}/${BUILD_ID}/linux/android/${TARGET}"
+BASE="https://ci.android.com/builds/submitted/${BUILD_ID}/${TARGET}/latest/raw"
 
 # ---------------------------------------------------------------------
-# 2. 列出 artifact
+# 2. artifact 名称
+#    新版详情页是纯 JS 渲染的 SPA, 拿不到文件列表, 但命名规则固定:
+#      <target 去掉 -userdebug>-img-<build>.zip  ← system/vendor/product 等
+#      boot.zip                                  ← boot.img (kernel+ramdisk)
 # ---------------------------------------------------------------------
-list_artifacts() {
-  curl -fsSL --retry 3 "${BASE}/" 2>/dev/null \
-    | grep -oE '/raw/[A-Za-z0-9._+%-]+' \
-    | sed 's#^/raw/##' | sort -u
-}
+IMG_ZIP="${TARGET%-userdebug}-img-${BUILD_ID}.zip"
+BOOT_ZIP="boot.zip"
 
 if [ "$LIST_ONLY" = 1 ]; then
-  log "artifact 列表:"
-  list_artifacts || die "无法读取构建详情页, 请用浏览器打开 $BASE"
+  log "该构建的镜像包:"
+  echo "  $IMG_ZIP"
+  echo "  $BOOT_ZIP"
+  echo "  下载前缀: $BASE/"
   exit 0
 fi
 
 # ---------------------------------------------------------------------
-# 3. 下载单个文件 (带断点续传 + 重试 + 有效性检查)
+# 3. 下载 (带断点续传 + 重试 + 有效性检查)
+#    ci.android.com 会 307 跳到 storage.googleapis.com, 该域名在部分网络不可达;
+#    storage-download.googleapis.com 是官方等价端点, 签名不覆盖 host, 换域名仍有效。
 # ---------------------------------------------------------------------
-download() {
+real_url() {
+  local name="$1" loc
+  loc=$(curl -s -o /dev/null -D - -r 0-0 "$BASE/$name" | tr -d '\r' | sed -n 's/^[Ll]ocation: *//p')
+  if [ -n "$loc" ]; then
+    printf '%s' "${loc/storage.googleapis.com/storage-download.googleapis.com}"
+  else
+    printf '%s' "$BASE/$name"
+  fi
+}
+
+fetch() {
   local name="$1" dest="$OUT/$1" url
   if [ -s "$dest" ]; then
     log "$name 已存在 ($(du -h "$dest" | cut -f1)), 跳过"
     return 0
   fi
-  url="${BASE}/raw/${name}"
-  log "下载 $name ← ${url}"
-  if curl -fL --retry 3 --retry-delay 2 -C - --progress-bar "$url" -o "$dest.part"; then
+  url=$(real_url "$name")
+  log "下载 $name"
+  if curl -fL --retry 5 --retry-delay 3 -C - --progress-bar "$url" -o "$dest.part"; then
     mv -f "$dest.part" "$dest"
   else
     rm -f "$dest.part"; return 1
   fi
-  # 空文件/HTML 错误页视为失败
   [ -s "$dest" ] || { rm -f "$dest"; return 1; }
   if head -c 16 "$dest" | grep -qi '<!DOCTYPE'; then
     warn "$name 返回的是 HTML 错误页"; rm -f "$dest"; return 1
@@ -135,43 +135,26 @@ download() {
   return 0
 }
 
-FAILED=()
-for f in "${WANTED[@]}"; do
-  download "$f" || FAILED+=("$f")
-done
+fetch "$IMG_ZIP" || die "系统镜像包 ${IMG_ZIP} 下载失败"
+fetch "$BOOT_ZIP" || die "boot.zip 下载失败"
 
 # ---------------------------------------------------------------------
-# 4. 回退: 新版构建把磁盘镜像打成一个 zip, 从里面抽取
+# 4. 解包
 # ---------------------------------------------------------------------
-if [ ${#FAILED[@]} -gt 0 ]; then
-  warn "以下文件直链不可用: ${FAILED[*]}"
-  ZIP_NAME=$(list_artifacts | grep -E 'img.*\.zip$' | head -n 1 || true)
-  if [ -n "$ZIP_NAME" ]; then
-    log "回退方案: 下载并解包 ${ZIP_NAME}"
-    ZFILE="$WORK/$ZIP_NAME"
-    curl -fL --retry 3 -C - --progress-bar "${BASE}/raw/${ZIP_NAME}" -o "$ZFILE" || die "zip 下载失败"
-    ( cd "$WORK" && unzip -o -q "$ZFILE" )
-    for f in system.img vendor.img ramdisk.img; do
-      if [ -f "$WORK/$f" ] && [ ! -s "$OUT/$f" ]; then
-        mv -f "$WORK/$f" "$OUT/$f"; log "从 zip 提取 $f"
-      fi
-    done
-    # 新版 Cuttlefish 常只有 boot.img (kernel+ramdisk 合并)
-    if [ ! -s "$OUT/kernel" ]; then
-      if [ -s "$WORK/kernel" ]; then
-        mv -f "$WORK/kernel" "$OUT/kernel"; log "从 zip 提取 kernel"
-      elif [ -s "$WORK/boot.img" ]; then
-        warn "只找到 boot.img, 需要拆包拿 arm64 Image:"
-        warn "  pip install unpack_bootimg && unpack_bootimg --boot_img $WORK/boot.img --out $WORK/boot"
-        warn "  再把 \$WORK/boot/kernel 改名为 $OUT/kernel"
-      fi
-    fi
-    if [ ! -s "$OUT/ramdisk.img" ] && [ -s "$WORK/boot.img" ]; then
-      warn "ramdisk.img 需从 boot.img 拆出 (同上 unpack_bootimg, 取 ramdisk 段)"
-    fi
-  else
-    warn "未找到 img zip, 请用 --list 核对 artifact 名称"
-  fi
+log "解包 $IMG_ZIP"
+unzip -o -q "$OUT/$IMG_ZIP" -d "$OUT" || die "解包 ${IMG_ZIP} 失败"
+
+log "解包 $BOOT_ZIP"
+unzip -o -q "$OUT/$BOOT_ZIP" -d "$WORK" || die "解包 boot.zip 失败"
+[ -s "$OUT/boot.img" ] || { [ -s "$WORK/boot.img" ] && mv -f "$WORK/boot.img" "$OUT/boot.img"; }
+
+# QEMU 用 -kernel/-initrd 直接引导, 需要把 boot.img 拆成 kernel + ramdisk
+if [ ! -s "$OUT/kernel" ] && [ -s "$OUT/boot.img" ]; then
+  log "拆解 boot.img"
+  python3 "$(dirname "$0")/extract-boot.py" "$OUT/boot.img" "$WORK/boot" \
+    && { mv -f "$WORK/boot/kernel" "$OUT/kernel"; mv -f "$WORK/boot/ramdisk" "$OUT/ramdisk.img"; \
+         log "得到 kernel / ramdisk.img"; } \
+    || warn "boot.img 拆解失败, 见上方错误"
 fi
 
 # ---------------------------------------------------------------------
