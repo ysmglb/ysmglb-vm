@@ -25,7 +25,7 @@ jobs:
 
     env:
       NDK_VERSION: "26.3.11579264"
-      API: "26"
+      API: "28"
       QEMU_VER: ${{ github.event.inputs.qemu_version || '9.1.0' }}
 
     steps:

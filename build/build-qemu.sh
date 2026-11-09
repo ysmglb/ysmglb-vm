@@ -10,7 +10,8 @@
 # =====================================================================
 set -euo pipefail
 
-API=26
+# 与 build-deps.sh 保持一致: API 28 起 bionic 才完整提供 iconv
+API=28
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="$ROOT/build"
 WORK="$BUILD/_work"

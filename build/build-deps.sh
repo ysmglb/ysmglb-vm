@@ -9,7 +9,9 @@
 # =====================================================================
 set -euo pipefail
 
-API=26
+# API 26 的 bionic 缺少 iconv_open(), glib 编译会失败 (Dependency "iconv" not found)
+# 从 API 28 起 bionic 才完整提供 iconv; 28 对应 Android 9, 普及率足够
+API=28
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="$ROOT/build"
 WORK="$BUILD/_work"
@@ -27,12 +29,13 @@ mkdir -p "$WORK" "$PREFIX"
 cd "$WORK"
 
 # ---- 0. 给 NDK 自带但无 pkg-config 文件的库补 .pc ----
-# iconv: glib 用 dependency('iconv') 且是必需项, Android 的 iconv 在 libc 中
+# iconv: Android 的 iconv 在 libc 中, 但某些构建环境下需要 pkg-config 声明
 mkdir -p "$PREFIX/lib/pkgconfig"
 if [ ! -f "$PREFIX/lib/pkgconfig/iconv.pc" ]; then
+  echo "== 生成 iconv.pc (API=$API) =="
   cat > "$PREFIX/lib/pkgconfig/iconv.pc" <<'EOF'
 Name: iconv
-Description: Android bionic iconv (in libc)
+Description: Android bionic iconv (in libc since API 28)
 Version: 1
 Libs:
 Cflags:
