@@ -113,14 +113,18 @@ jobs:
           echo "HEAD_SHA=${GITHUB_SHA}" > FAIL.md
           echo "RUN_URL=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> FAIL.md
           if [ -s deps.log ]; then
-            echo "===== LAST 80 LINES =====" >> FAIL.md
-            tail -80 deps.log >> FAIL.md
-            echo "===== ==DEP== MARKERS =====" >> FAIL.md
+            echo "===== DEPS: LAST 40 LINES =====" >> FAIL.md
+            tail -40 deps.log >> FAIL.md
+            echo "===== DEPS: ==DEP== MARKERS =====" >> FAIL.md
             grep "==DEP==" deps.log >> FAIL.md || true
           else
             echo "deps.log empty or missing!" >> FAIL.md
             ls -la >> FAIL.md
           fi
-          git add FAIL.md deps.log 2>/dev/null || git add FAIL.md
+          if [ -s qemu.log ]; then
+            echo "===== QEMU: LAST 100 LINES =====" >> FAIL.md
+            tail -100 qemu.log >> FAIL.md
+          fi
+          git add FAIL.md deps.log qemu.log 2>/dev/null || git add FAIL.md
           git commit -m "CI failure log: $(date -u +%H:%M) from ${GITHUB_SHA:0:7}"
           git push --force origin HEAD:ci-failure-latest
