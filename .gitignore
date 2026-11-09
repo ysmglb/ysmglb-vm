@@ -1,8 +1,8 @@
 *.iml
 .idea/
 .gradle/
-build/
-app/build/
+/app/build/
+/build/*.log
 local.properties
 captures/
 .externalNativeBuild/
@@ -10,6 +10,7 @@ captures/
 # QEMU 二进制与镜像不入库
 app/src/main/jniLibs/arm64-v8a/libqemu.so
 images-download/
+# 交叉编译中间产物 (build/ 下的脚本要入库, 只忽略产物)
 build/_work/
 build/_prefix/
 build-log.txt
