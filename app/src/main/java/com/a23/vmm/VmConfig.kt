@@ -30,6 +30,9 @@ data class VmConfig(
         if (!dataImg.exists()) {
             RandomAccessFile(dataImg, "rw").use { it.setLength(4L * 1024 * 1024 * 1024) }
         }
+        // Cuttlefish 16644040 的镜像布局: system/vendor/product 都在 super 分区里
+        // (动态分区), 所以只挂 super.img 一个盘, 由 guest 端 first-stage init 用
+        // dm-linear 自己切分; 分区由 androidboot.super_partition 指定。
         val gpuDevice = if (glAccelerated) "virtio-gpu-gl-pci" else "virtio-gpu-device"
         // TODO(启动参数调优): Cuttlefish 对 androidboot.* 要求随版本变化,
         //  首次跑通后再按 /proc/cmdline 与内核日志逐步修正, 必要时补 data分区 fstab
@@ -44,11 +47,12 @@ data class VmConfig(
             "console=ttyAMA0 earlycon=pl011,0x9000000 " +
                 "androidboot.hardware=cutf_cvm " +
                 "androidboot.selinux=permissive " +
-                "androidboot.serialno=vmm0001",
-            "-drive", "if=none,id=sys,file=${File(img, "system.img").absolutePath},format=raw,readonly=on",
-            "-device", "virtio-blk-device,drive=sys",
-            "-drive", "if=none,id=vdr,file=${File(img, "vendor.img").absolutePath},format=raw,readonly=on",
-            "-device", "virtio-blk-device,drive=vdr",
+                "androidboot.serialno=vmm0001 " +
+                "androidboot.super_partition=/dev/block/vda",
+            // 第一块 virtio-blk 是 super (guest 里 /dev/block/vda)
+            "-drive", "if=none,id=super,file=${File(img, "super.img").absolutePath},format=raw,readonly=on",
+            "-device", "virtio-blk-device,drive=super",
+            // 第二块是 data (guest 里 /dev/block/vdb), 首次启动由 vold 格式化
             "-drive", "if=none,id=data,file=${dataImg.absolutePath},format=raw",
             "-device", "virtio-blk-device,drive=data",
             "-device", gpuDevice,

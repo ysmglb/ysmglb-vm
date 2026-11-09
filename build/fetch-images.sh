@@ -145,8 +145,17 @@ fetch "$IMG_ZIP" || die "系统镜像包 ${IMG_ZIP} 下载失败"
 # 4. 解包
 # ---------------------------------------------------------------------
 log "解包 $IMG_ZIP"
-unzip -o -q "$OUT/$IMG_ZIP" boot.img vendor_boot.img init_boot.img super.img -d "$OUT" \
+unzip -o -q "$OUT/$IMG_ZIP" boot.img vendor_boot.img init_boot.img -d "$OUT" \
   || die "解包 ${IMG_ZIP} 失败"
+
+# super.img 是 Android sparse 格式 (QEMU 只认 raw), 转出来是 8.6G 的稀疏文件
+if [ ! -s "$OUT/super.img" ]; then
+  log "super.img 转 raw (约 8.6G, 稀疏写入)"
+  unzip -o -q "$OUT/$IMG_ZIP" super.img -d "$WORK" || die "解包 super.img 失败"
+  python3 "$(dirname "$0")/unsparse.py" "$WORK/super.img" "$OUT/super.img" \
+    || die "super.img 转换失败"
+  rm -f "$WORK/super.img"
+fi
 
 # QEMU 用 -kernel/-initrd 直接引导, 需要把 boot.img 拆成 kernel + ramdisk
 # Android 13+ (GKI) 的 boot.img 只有 kernel, 通用 ramdisk 在 init_boot.img 里
