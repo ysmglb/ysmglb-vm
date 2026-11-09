@@ -26,17 +26,18 @@ export CXX=aarch64-linux-android$API-clang++
 # pkg-config 再叠一层 sysroot 前缀会变成 "...sysroot/home/runner/.../_prefix/include"
 export PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig"
 
+# 必须先建目录: 下面 > $DEP_LOG 需要 _work 存在, 否则脚本立刻 "No such file or directory"
+mkdir -p "$WORK" "$PREFIX"
+cd "$WORK"
+
 # DEP 进度日志 — 汇总后写到 step summary
 DEP_LOG="$WORK/dep-status.log"
-> "$DEP_LOG"
+: > "$DEP_LOG"
 step_summary() {  # 把内容写到 GitHub Actions step summary (如果存在)
   if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
     echo "$1" >> "$GITHUB_STEP_SUMMARY"
   fi
 }
-
-mkdir -p "$WORK" "$PREFIX"
-cd "$WORK"
 
 # ---- 0. 给 NDK 自带但无 pkg-config 文件的库补 .pc ----
 # iconv: Android 的 iconv 在 libc 中, 但某些构建环境下需要 pkg-config 声明
