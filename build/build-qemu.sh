@@ -20,7 +20,7 @@ NDK=${NDK:-/opt/android-ndk-r26d}
 TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
 
 export PATH="$TC/bin:$PATH"
-export PKG_CONFIG_SYSROOT_DIR="$TC/sysroot"
+# 不要设 PKG_CONFIG_SYSROOT_DIR (同 build-deps.sh 的原因)
 export PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig"
 # configure 会推导 pkg_config=${PKG_CONFIG-${cross_prefix}pkg-config},
 # 不显式指定就会去找 aarch64-linux-android26-pkg-config (不存在)

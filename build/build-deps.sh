@@ -22,7 +22,8 @@ TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
 export PATH="$TC/bin:$PATH"
 export CC=aarch64-linux-android$API-clang
 export CXX=aarch64-linux-android$API-clang++
-export PKG_CONFIG_SYSROOT_DIR="$TC/sysroot"
+# 不要设 PKG_CONFIG_SYSROOT_DIR: 我们的依赖库 install prefix 是构建机上的绝对路径,
+# pkg-config 再叠一层 sysroot 前缀会变成 "...sysroot/home/runner/.../_prefix/include"
 export PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig"
 
 mkdir -p "$WORK" "$PREFIX"
