@@ -1,0 +1,13 @@
+# Cuttlefish (cutf_cvm) first-stage fstab — 自建版。
+# 原版由 bootloader 注入设备树; 我们 -kernel 直启没有 bootloader, 所以塞进 ramdisk。
+# 去掉了 avb=/verity 标志 (镜像没有 vbmeta 分区); first_stage_mount 在 Android 13+ 已废弃,
+# 现代 init 会自动挂载 system/vendor 等.
+# /data 暂不挂: 空文件没有 f2fs, ramdisk 里也没有 mkfs.f2fs
+system        /system        ext4  ro,barrier=1  wait,slotselect,logical
+system_ext    /system_ext    ext4  ro,barrier=1  wait,slotselect,logical
+product       /product       ext4  ro,barrier=1  wait,slotselect,logical
+vendor        /vendor        ext4  ro,barrier=1  wait,slotselect,logical
+odm           /odm           ext4  ro,barrier=1  wait,slotselect,logical
+system_dlkm   /system_dlkm   ext4  ro,barrier=1  wait,slotselect,logical
+vendor_dlkm   /vendor_dlkm   ext4  ro,barrier=1  wait,slotselect,logical
+odm_dlkm      /odm_dlkm      ext4  ro,barrier=1  wait,slotselect,logical
