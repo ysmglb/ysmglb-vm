@@ -15,7 +15,7 @@
 #   --target <名>   默认 aosp_cf_arm64_phone-trunk_staging-userdebug
 #   --out    <目录> 默认 <工程根>/images-download
 #
-# 产物: kernel / ramdisk.img / system.img / vendor.img
+# 产物: kernel / ramdisk.img / boot.img / vendor_boot.img / super.img
 #       (与 app/src/main/java/com/a23/vmm/VmConfig.kt 的启动参数一一对应)
 # =====================================================================
 set -euo pipefail
@@ -29,8 +29,10 @@ LIST_ONLY=0
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/images-download"
 WORK="$OUT/.work"
-# 新版 Cuttlefish 构建把系统镜像打成 img-<build>.zip, kernel/ramdisk 在 boot.zip 里
-WANTED=(kernel ramdisk.img system.img vendor.img product.img)
+# 新版 Cuttlefish (16644040 实测) 全部镜像都在 img-<build>.zip 里:
+#   boot.img(67M) / vendor_boot.img(67M) / init_boot.img / super.img(1.7G, 动态分区)
+# 没有独立的 system.img / vendor.img, 系统分区在 super.img 内部
+WANTED=(kernel ramdisk.img boot.img vendor_boot.img super.img)
 PKG_NAME="com.a23.vmm"
 
 log()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
@@ -86,16 +88,13 @@ BASE="https://ci.android.com/builds/submitted/${BUILD_ID}/${TARGET}/latest/raw"
 # ---------------------------------------------------------------------
 # 2. artifact 名称
 #    新版详情页是纯 JS 渲染的 SPA, 拿不到文件列表, 但命名规则固定:
-#      <target 去掉 -userdebug>-img-<build>.zip  ← system/vendor/product 等
-#      boot.zip                                  ← boot.img (kernel+ramdisk)
+#      <target 去掉 -userdebug>-img-<build>.zip  ← boot/vendor_boot/super 等全部镜像
 # ---------------------------------------------------------------------
 IMG_ZIP="${TARGET%-userdebug}-img-${BUILD_ID}.zip"
-BOOT_ZIP="boot.zip"
 
 if [ "$LIST_ONLY" = 1 ]; then
   log "该构建的镜像包:"
-  echo "  $IMG_ZIP"
-  echo "  $BOOT_ZIP"
+  echo "  $IMG_ZIP  (含 boot.img / vendor_boot.img / init_boot.img / super.img ...)"
   echo "  下载前缀: $BASE/"
   exit 0
 fi
@@ -116,45 +115,56 @@ real_url() {
 }
 
 fetch() {
-  local name="$1" dest="$OUT/$1" url
-  if [ -s "$dest" ]; then
+  local name="$1" dest="$OUT/$1" url i
+  if [ -s "$dest" ] && ! head -c 16 "$dest" | grep -qi '<!DOCTYPE'; then
     log "$name 已存在 ($(du -h "$dest" | cut -f1)), 跳过"
     return 0
   fi
-  url=$(real_url "$name")
   log "下载 $name"
-  if curl -fL --retry 5 --retry-delay 3 -C - --progress-bar "$url" -o "$dest.part"; then
-    mv -f "$dest.part" "$dest"
-  else
-    rm -f "$dest.part"; return 1
+  # ci.android.com 的 GCS 签名 URL 只有 5 分钟有效期 (Expires = 签发+300s),
+  # 1.1G 的包单连接下不完 → 失败就用新签名 URL 续传, 直到下完
+  for i in $(seq 1 200); do
+    url=$(real_url "$name")
+    if curl -fL --retry 2 --retry-delay 2 -C - --progress-bar "$url" -o "$dest.part"; then
+      break
+    fi
+    log "  连接中断, 刷新签名 URL 后续传 (第 $i 次)"
+    sleep 2
+  done
+  [ -s "$dest.part" ] || { rm -f "$dest.part"; return 1; }
+  if head -c 16 "$dest.part" | grep -qi '<!DOCTYPE'; then
+    warn "$name 返回的是 HTML 错误页"; rm -f "$dest.part"; return 1
   fi
-  [ -s "$dest" ] || { rm -f "$dest"; return 1; }
-  if head -c 16 "$dest" | grep -qi '<!DOCTYPE'; then
-    warn "$name 返回的是 HTML 错误页"; rm -f "$dest"; return 1
-  fi
+  mv -f "$dest.part" "$dest"
   return 0
 }
 
 fetch "$IMG_ZIP" || die "系统镜像包 ${IMG_ZIP} 下载失败"
-fetch "$BOOT_ZIP" || die "boot.zip 下载失败"
 
 # ---------------------------------------------------------------------
 # 4. 解包
 # ---------------------------------------------------------------------
 log "解包 $IMG_ZIP"
-unzip -o -q "$OUT/$IMG_ZIP" -d "$OUT" || die "解包 ${IMG_ZIP} 失败"
-
-log "解包 $BOOT_ZIP"
-unzip -o -q "$OUT/$BOOT_ZIP" -d "$WORK" || die "解包 boot.zip 失败"
-[ -s "$OUT/boot.img" ] || { [ -s "$WORK/boot.img" ] && mv -f "$WORK/boot.img" "$OUT/boot.img"; }
+unzip -o -q "$OUT/$IMG_ZIP" boot.img vendor_boot.img init_boot.img super.img -d "$OUT" \
+  || die "解包 ${IMG_ZIP} 失败"
 
 # QEMU 用 -kernel/-initrd 直接引导, 需要把 boot.img 拆成 kernel + ramdisk
+# Android 13+ (GKI) 的 boot.img 只有 kernel, 通用 ramdisk 在 init_boot.img 里
 if [ ! -s "$OUT/kernel" ] && [ -s "$OUT/boot.img" ]; then
   log "拆解 boot.img"
-  python3 "$(dirname "$0")/extract-boot.py" "$OUT/boot.img" "$WORK/boot" \
-    && { mv -f "$WORK/boot/kernel" "$OUT/kernel"; mv -f "$WORK/boot/ramdisk" "$OUT/ramdisk.img"; \
-         log "得到 kernel / ramdisk.img"; } \
-    || warn "boot.img 拆解失败, 见上方错误"
+  if python3 "$(dirname "$0")/extract-boot.py" "$OUT/boot.img" "$WORK/boot"; then
+    [ -s "$WORK/boot/kernel" ] && mv -f "$WORK/boot/kernel" "$OUT/kernel"
+    if [ -s "$WORK/boot/ramdisk" ]; then
+      mv -f "$WORK/boot/ramdisk" "$OUT/ramdisk.img"
+    elif [ -s "$OUT/init_boot.img" ]; then
+      log "boot.img 没有 ramdisk, 改从 init_boot.img 取"
+      python3 "$(dirname "$0")/extract-boot.py" "$OUT/init_boot.img" "$WORK/iboot" \
+        && [ -s "$WORK/iboot/ramdisk" ] && mv -f "$WORK/iboot/ramdisk" "$OUT/ramdisk.img"
+    fi
+    log "得到 kernel / ramdisk.img"
+  else
+    warn "boot.img 拆解失败, 见上方错误"
+  fi
 fi
 
 # ---------------------------------------------------------------------
