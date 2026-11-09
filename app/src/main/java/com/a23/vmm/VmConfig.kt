@@ -15,7 +15,7 @@ data class VmConfig(
     val ramMb: Int = 3072,
     val cpus: Int = 4,
     /** true = virtio-gpu-gl-pci (virgl GL 加速, 需 QEMU 编译时 --enable-virglrenderer); false = 无加速回退 */
-    val glAccelerated: Boolean = true,
+    val glAccelerated: Boolean = false,
     /** VNC 显示号, 0 → 端口 5900 */
     val vncDisplay: Int = 0,
     val monitorPort: Int = 4444,
@@ -34,7 +34,6 @@ data class VmConfig(
         // TODO(启动参数调优): Cuttlefish 对 androidboot.* 要求随版本变化,
         //  首次跑通后再按 /proc/cmdline 与内核日志逐步修正, 必要时补 data分区 fstab
         return listOf(
-            "qemu-system-aarch64",
             "-M", "virt,gic-version=3",
             "-cpu", "cortex-a76",
             "-smp", cpus.toString(),
