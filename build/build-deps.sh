@@ -133,8 +133,15 @@ meson_dep epoxy https://github.com/anholt/libepoxy.git 1.5.10 \
 # 备选方案: 直接用 AOSP 带过适配的仓库
 #   https://android.googlesource.com/platform/external/virglrenderer
 # 1.0.1 没有 gbm 选项, gbm 依赖由 minigbm_allocation 触发
-meson_dep virglrenderer https://gitlab.freedesktop.org/virgl/virglrenderer.git virglrenderer-1.0.1 \
-    -Dtests=false -Dminigbm_allocation=false -Dvenus=false -Dplatforms=egl
+# 注意: 1.0.1 的 meson.build:244 只要 libdrm 找到了且 platforms 含 egl, 就
+#   gbm_dep = dependency('gbm', required: require_egl)  → 必失败
+# Android NDK 不提供 gbm (设备上是 minigbm, NDK 里没有头和 .pc), 这是硬依赖,
+# 没有选项能关。所以这里允许失败: QEMU 会退化成不带 OpenGL 的版本。
+if ! meson_dep virglrenderer https://gitlab.freedesktop.org/virgl/virglrenderer.git virglrenderer-1.0.1 \
+    -Dtests=false -Dminigbm_allocation=false -Dvenus=false -Dplatforms=egl; then
+  echo "==DEP== WARN virglrenderer 不可用 (缺少 gbm), QEMU 将不带 OpenGL 加速"
+  step_summary "- ⚠️ virglrenderer: SKIP (Android 无 gbm, 本次无 OpenGL)"
+fi
 
 echo
 echo "依赖库安装完成 → $PREFIX"

@@ -66,6 +66,15 @@ rm -rf build
 # 关闭所有可选依赖, 只保留: vnc 显示 / slirp 网络 / virglrenderer GPU
 # 注意: QEMU 9.x 已移除 --disable-tests / --disable-libxml2 / --disable-containers
 #       / --audio-drv-list 等旧选项, 传了会直接 "unknown option" 退出
+# virglrenderer 需要 gbm (Android NDK 没有), 编出来才启用 OpenGL
+GL_FLAGS=()
+if [ -f "$PREFIX/lib/pkgconfig/virglrenderer.pc" ]; then
+  GL_FLAGS=(--enable-virglrenderer --enable-opengl)
+  echo "== 启用 virtio-gpu-gl (virglrenderer) =="
+else
+  echo "== 未找到 virglrenderer.pc, 本次不带 OpenGL 加速 =="
+fi
+
 ./configure \
   --target-list=aarch64-softmmu \
   --cross-prefix="aarch64-linux-android$API-" \
@@ -73,8 +82,7 @@ rm -rf build
   --enable-pie \
   --enable-vnc \
   --enable-slirp \
-  --enable-virglrenderer \
-  --enable-opengl \
+  "${GL_FLAGS[@]}" \
   --disable-sdl --disable-gtk --disable-curses \
   --disable-docs --disable-tools --disable-guest-agent \
   --disable-zstd --disable-lzo --disable-snappy --disable-bzip2 --disable-lzfse \
