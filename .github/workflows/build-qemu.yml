@@ -66,6 +66,18 @@ jobs:
           chmod +x build/build-deps.sh
           bash build/build-deps.sh 2>&1 | tee deps.log
 
+      - name: DEP 进度标记
+        if: always()
+        run: |
+          echo "=== DEP markers ==="
+          if [ -f deps.log ]; then
+            grep "==DEP==" deps.log || true
+            echo "=== tail 30 lines ==="
+            tail -30 deps.log
+          else
+            echo "deps.log not found"
+          fi
+
       - name: 编译 QEMU
         env:
           NDK: ${{ env.NDK }}
