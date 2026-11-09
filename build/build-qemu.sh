@@ -22,6 +22,16 @@ export PATH="$TC/bin:$PATH"
 export PKG_CONFIG_SYSROOT_DIR="$TC/sysroot"
 export PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig"
 
+# configure 会用 ${CC-${cross_prefix}gcc} 推导交叉编译器, NDK 没有 *-gcc,
+# 因此必须显式导出全部工具链, 否则报 "C compiler cannot create executables"
+export CC="$TC/bin/aarch64-linux-android$API-clang"
+export CXX="$TC/bin/aarch64-linux-android$API-clang++"
+export AR="$TC/bin/llvm-ar"
+export NM="$TC/bin/llvm-nm"
+export STRIP="$TC/bin/llvm-strip"
+export OBJCOPY="$TC/bin/llvm-objcopy"
+export RANLIB="$TC/bin/llvm-ranlib"
+
 QEMU_VER=${QEMU_VER:-9.1.0}
 
 # ---- 1. 源码 (发布 tarball 已内嵌 dtc/meson 等 submodule) ----
@@ -35,28 +45,27 @@ cd "qemu-$QEMU_VER"
 
 # ---- 2. configure ----
 # 关闭所有可选依赖, 只保留: vnc 显示 / slirp 网络 / virglrenderer GPU
+# 注意: QEMU 9.x 已移除 --disable-tests / --disable-libxml2 / --disable-containers
+#       / --audio-drv-list 等旧选项, 传了会直接 "unknown option" 退出
 ./configure \
   --target-list=aarch64-softmmu \
-  --cross-prefix=aarch64-linux-android26- \
+  --cross-prefix="aarch64-linux-android$API-" \
   --host-cc=clang \
   --enable-pie \
   --enable-vnc \
   --enable-slirp \
   --enable-virglrenderer \
   --enable-opengl \
-  --enable-fdt=internal \
   --disable-sdl --disable-gtk --disable-curses \
-  --disable-docs --disable-tests --disable-tools --disable-guest-agent \
+  --disable-docs --disable-tools --disable-guest-agent \
   --disable-zstd --disable-lzo --disable-snappy --disable-bzip2 --disable-lzfse \
   --disable-gnutls --disable-nettle --disable-gcrypt \
   --disable-seccomp --disable-numa --disable-libusb --disable-libiscsi \
   --disable-libnfs --disable-libssh --disable-rbd --disable-glusterfs \
-  --disable-libxml2 --disable-attr --disable-containers \
-  --audio-drv-list= \
+  --disable-attr \
   --extra-cflags="-I$PREFIX/include" \
   --extra-ldflags="-L$PREFIX/lib -llog" \
-  --host=bionic 2>/dev/null || true
-# 注: 若 configure 对 bionic 探测报错, 删掉上面最后一行 --host 并按报错逐项 disable
+  || { echo "== configure 失败, meson 日志末尾 =="; tail -n 80 build/meson-logs/meson-log.txt 2>/dev/null; exit 1; }
 
 # ---- 3. 编译 ----
 make -j"$(nproc)" qemu-system-aarch64
