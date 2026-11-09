@@ -1,0 +1,91 @@
+name: build-qemu
+
+# 在 GitHub 云端交叉编译 QEMU → libqemu.so (Android arm64)
+# 手动触发: Actions 页面 → build-qemu → Run workflow
+# 产物: 该次运行的 Artifacts 里下载 libqemu-arm64-v8a.zip
+
+on:
+  workflow_dispatch:
+    inputs:
+      qemu_version:
+        description: "QEMU 版本"
+        required: false
+        default: "9.1.0"
+  push:
+    paths:
+      - "build/build-deps.sh"
+      - "build/build-qemu.sh"
+      - "build/cross/android-arm64.ini"
+      - ".github/workflows/build-qemu.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 300
+
+    env:
+      NDK_VERSION: "26.3.11579264"
+      API: "26"
+      QEMU_VER: ${{ github.event.inputs.qemu_version || '9.1.0' }}
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装基础构建工具
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config unzip xz-utils bzip2 autoconf automake libtool \
+            python3-pip ninja-build cmake
+          python3 -m pip install --upgrade "meson>=1.2" ninja
+
+      - name: 安装 Android NDK ${{ env.NDK_VERSION }}
+        run: |
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" --install "ndk;${NDK_VERSION}"
+          echo "NDK=$SDK/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: 缓存依赖编译结果
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/_prefix
+            build/_work
+          key: deps-${{ runner.os }}-${{ env.API }}-${{ hashFiles('build/build-deps.sh', 'build/cross/android-arm64.ini') }}
+          restore-keys: |
+            deps-${{ runner.os }}-${{ env.API }}-
+
+      - name: 编译依赖库 (glib/pixman/libslirp/libdrm/libepoxy/virglrenderer)
+        env:
+          NDK: ${{ env.NDK }}
+        run: |
+          chmod +x build/build-deps.sh
+          bash build/build-deps.sh 2>&1 | tee deps.log
+
+      - name: 编译 QEMU
+        env:
+          NDK: ${{ env.NDK }}
+        run: |
+          chmod +x build/build-qemu.sh
+          bash build/build-qemu.sh 2>&1 | tee qemu.log
+          ls -lh app/src/main/jniLibs/arm64-v8a/libqemu.so
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: libqemu-arm64-v8a
+          path: app/src/main/jniLibs/arm64-v8a/libqemu.so
+          if-no-files-found: error
+
+      - name: 失败时上传日志
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            deps.log
+            qemu.log
+          if-no-files-found: ignore

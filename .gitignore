@@ -1,0 +1,15 @@
+*.iml
+.idea/
+.gradle/
+build/
+app/build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+# QEMU 二进制与镜像不入库
+app/src/main/jniLibs/arm64-v8a/libqemu.so
+images-download/
+build/_work/
+build/_prefix/
+build-log.txt

@@ -1,0 +1,9 @@
+# 保证 shell 脚本与 CI 配置在任何平台检出时都是 LF,
+# 否则 GitHub Actions 里的 bash 会因 CRLF 报 "bad interpreter"
+*.sh        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+gradlew     text eol=lf
+*.ini       text eol=lf
+*.bat       text eol=crlf
+*.jar       binary
