@@ -69,13 +69,9 @@ jobs:
       - name: DEP 进度标记
         if: always()
         run: |
-          echo "=== DEP markers ==="
+          echo "=== MARKERS ==="
           if [ -f deps.log ]; then
-            grep "==DEP==" deps.log || true
-            echo "=== tail 30 lines ==="
-            tail -30 deps.log
-          else
-            echo "deps.log not found"
+            grep -E "==DEP==|ERROR|FAILED|error:|ninja:|meson setup" deps.log | tail -40 || true
           fi
 
       - name: 编译 QEMU
