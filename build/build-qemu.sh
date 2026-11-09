@@ -62,6 +62,13 @@ cd "qemu-$QEMU_VER"
 # 清掉上一次失败留下的 meson 构建目录 (缓存的 _work 会带过来)
 rm -rf build
 
+# Android 没有 shm_open/shm_unlink (bionic API 30 才有), backends/hostmem-shm.c
+# 直接调用它们 → 编译失败。memory-backend-shm 我们用不到, 从构建里摘掉。
+if ! grep -q "A23_PATCHED_HOSTMEM_SHM" backends/meson.build; then
+  sed -i "s|system_ss.add(\[files('hostmem-shm.c'), rt\])|# A23_PATCHED_HOSTMEM_SHM: bionic 缺少 shm_open|" backends/meson.build
+fi
+grep -n "A23_PATCHED_HOSTMEM_SHM" backends/meson.build || { echo "== 补丁 hostmem-shm 失败 =="; exit 1; }
+
 # ---- 2. configure ----
 # 关闭所有可选依赖, 只保留: vnc 显示 / slirp 网络 / virglrenderer GPU
 # 注意: QEMU 9.x 已移除 --disable-tests / --disable-libxml2 / --disable-containers
@@ -92,7 +99,7 @@ fi
   --disable-vhost-user-blk-server --disable-vhost-net --disable-vhost-kernel \
   --disable-libnfs --disable-libssh --disable-rbd --disable-glusterfs \
   --disable-attr \
-  --extra-cflags="-I$PREFIX/include" \
+  --extra-cflags="-include $BUILD/compat/android-compat.h -I$PREFIX/include" \
   --extra-ldflags="-L$PREFIX/lib -llog" \
   || { echo "== configure 失败, meson 日志末尾 =="; tail -n 80 build/meson-logs/meson-log.txt 2>/dev/null; exit 1; }
 
