@@ -65,12 +65,20 @@ meson_dep() {  # meson_dep <name> <git-url> <tag> [extra meson flags...]
   rm -rf "src-$name"
   git clone --depth 1 --branch "$tag" "$url" "src-$name"
   echo "==DEP== SETUP $name"
-  meson setup "build-$name" "src-$name" \
+  if ! meson setup "build-$name" "src-$name" \
       --cross-file="$BUILD/cross/android-arm64.ini" \
       --prefix="$PREFIX" --default-library=static --buildtype=release \
-      "$@"
+      "$@" 2>&1 | tee setup-$name.log; then
+    echo "==DEP== FAIL-SETUP $name"
+    tail -20 setup-$name.log
+    return 1
+  fi
   echo "==DEP== NINJA $name"
-  ninja -C "build-$name" install
+  if ! ninja -C "build-$name" install 2>&1 | tee ninja-$name.log; then
+    echo "==DEP== FAIL-NINJA $name"
+    tail -20 ninja-$name.log
+    return 1
+  fi
   echo "==DEP== DONE  $name"
 }
 
