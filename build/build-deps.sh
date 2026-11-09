@@ -26,6 +26,15 @@ export CXX=aarch64-linux-android$API-clang++
 # pkg-config 再叠一层 sysroot 前缀会变成 "...sysroot/home/runner/.../_prefix/include"
 export PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig"
 
+# DEP 进度日志 — 汇总后写到 step summary
+DEP_LOG="$WORK/dep-status.log"
+> "$DEP_LOG"
+step_summary() {  # 把内容写到 GitHub Actions step summary (如果存在)
+  if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+    echo "$1" >> "$GITHUB_STEP_SUMMARY"
+  fi
+}
+
 mkdir -p "$WORK" "$PREFIX"
 cd "$WORK"
 
@@ -59,7 +68,9 @@ fi
 meson_dep() {  # meson_dep <name> <git-url> <tag> [extra meson flags...]
   local name=$1 url=$2 tag=$3; shift 3
   if [ -f "$PREFIX/lib/pkgconfig/$name.pc" ] || [ -f "$PREFIX/lib/pkgconfig/${name%-2.0}.pc" ]; then
-    echo "==DEP== SKIP  $name (already installed)"; return
+    echo "==DEP== SKIP  $name (already installed)"
+    step_summary "- $name: SKIP (cached)"
+    return
   fi
   echo "==DEP== START $name"
   rm -rf "src-$name"
@@ -70,16 +81,23 @@ meson_dep() {  # meson_dep <name> <git-url> <tag> [extra meson flags...]
       --prefix="$PREFIX" --default-library=static --buildtype=release \
       "$@" 2>&1 | tee setup-$name.log; then
     echo "==DEP== FAIL-SETUP $name"
-    tail -20 setup-$name.log
+    step_summary "- ❌ $name: SETUP FAILED"
+    step_summary '```'
+    tail -15 setup-$name.log | while IFS= read -r line; do step_summary "$line"; done
+    step_summary '```'
     return 1
   fi
   echo "==DEP== NINJA $name"
   if ! ninja -C "build-$name" install 2>&1 | tee ninja-$name.log; then
     echo "==DEP== FAIL-NINJA $name"
-    tail -20 ninja-$name.log
+    step_summary "- ❌ $name: NINJA FAILED"
+    step_summary '```'
+    tail -15 ninja-$name.log | while IFS= read -r line; do step_summary "$line"; done
+    step_summary '```'
     return 1
   fi
   echo "==DEP== DONE  $name"
+  step_summary "- ✅ $name: OK"
 }
 
 # ---- 1. glib (QEMU 硬依赖) ----
