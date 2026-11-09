@@ -100,8 +100,9 @@ meson_dep epoxy https://github.com/anholt/libepoxy.git 1.5.10 \
 # 若上游 tag 的 meson 选项名有出入, 查看其 meson_options.txt;
 # 备选方案: 直接用 AOSP 带过适配的仓库
 #   https://android.googlesource.com/platform/external/virglrenderer
+# 1.0.1 没有 gbm 选项, gbm 依赖由 minigbm_allocation 触发
 meson_dep virglrenderer https://gitlab.freedesktop.org/virgl/virglrenderer.git virglrenderer-1.0.1 \
-    -Dtests=false -Dgbm=disabled -Dminigbm_allocation=false -Dvenus=false
+    -Dtests=false -Dminigbm_allocation=false -Dvenus=false -Dplatforms=egl
 
 echo
 echo "依赖库安装完成 → $PREFIX"
