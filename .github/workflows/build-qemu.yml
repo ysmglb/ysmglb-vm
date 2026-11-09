@@ -22,6 +22,8 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 300
+    permissions:
+      contents: write  # 允许 bot push 日志到 ci-failure-latest branch
 
     env:
       NDK_VERSION: "26.3.11579264"
@@ -99,3 +101,21 @@ jobs:
             deps.log
             qemu.log
           if-no-files-found: ignore
+
+      - name: 失败时保存 deps.log 到 ci-failure-latest branch
+        if: failure() && github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan ci-failure-latest
+          git rm -rf . >/dev/null 2>&1 || true
+          cat deps.log > deps.log  # 如果存在
+          echo "HEAD_SHA=${GITHUB_SHA}" > FAIL.md
+          echo "RUN_URL=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> FAIL.md
+          echo "===== LAST 80 LINES =====" >> FAIL.md
+          tail -80 deps.log >> FAIL.md 2>/dev/null || true
+          echo "===== ==DEP== MARKERS =====" >> FAIL.md
+          grep "==DEP==" deps.log >> FAIL.md 2>/dev/null || true
+          git add FAIL.md deps.log 2>/dev/null || git add FAIL.md
+          git commit -m "CI failure log: $(date -u +%H:%M) from ${GITHUB_SHA:0:7}"
+          git push --force origin HEAD:ci-failure-latest
