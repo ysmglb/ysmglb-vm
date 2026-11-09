@@ -26,6 +26,19 @@ export PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig"
 mkdir -p "$WORK" "$PREFIX"
 cd "$WORK"
 
+# ---- 0. 给 NDK 自带但无 pkg-config 文件的库补 .pc ----
+# iconv: glib 用 dependency('iconv') 且是必需项, Android 的 iconv 在 libc 中
+mkdir -p "$PREFIX/lib/pkgconfig"
+if [ ! -f "$PREFIX/lib/pkgconfig/iconv.pc" ]; then
+  cat > "$PREFIX/lib/pkgconfig/iconv.pc" <<'EOF'
+Name: iconv
+Description: Android bionic iconv (in libc)
+Version: 1
+Libs:
+Cflags:
+EOF
+fi
+
 # ---- 0. libffi (glib 的 GObject 闭包依赖, autotools 项目) ----
 if [ ! -f "$PREFIX/lib/pkgconfig/libffi.pc" ]; then
   echo "== libffi 3.4.6 =="
