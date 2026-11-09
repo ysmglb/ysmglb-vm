@@ -21,6 +21,9 @@ TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
 export PATH="$TC/bin:$PATH"
 export PKG_CONFIG_SYSROOT_DIR="$TC/sysroot"
 export PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig"
+# configure 会推导 pkg_config=${PKG_CONFIG-${cross_prefix}pkg-config},
+# 不显式指定就会去找 aarch64-linux-android26-pkg-config (不存在)
+export PKG_CONFIG=pkg-config
 
 # configure 会用 ${CC-${cross_prefix}gcc} 推导交叉编译器, NDK 没有 *-gcc,
 # 因此必须显式导出全部工具链, 否则报 "C compiler cannot create executables"
@@ -34,6 +37,18 @@ export RANLIB="$TC/bin/llvm-ranlib"
 
 QEMU_VER=${QEMU_VER:-9.1.0}
 
+# ---- 0. zlib.pc (NDK 自带 zlib.h/libz.so, 但不提供 pkg-config 文件) ----
+# QEMU 的 zlib 依赖是 required: true, 缺 .pc 会直接 configure 失败
+if [ ! -f "$PREFIX/lib/pkgconfig/zlib.pc" ]; then
+  cat > "$PREFIX/lib/pkgconfig/zlib.pc" <<'EOF'
+Name: zlib
+Description: Android NDK zlib
+Version: 1.3.1
+Libs: -lz
+Cflags:
+EOF
+fi
+
 # ---- 1. 源码 (发布 tarball 已内嵌 dtc/meson 等 submodule) ----
 mkdir -p "$WORK"
 cd "$WORK"
@@ -42,6 +57,9 @@ if [ ! -d "qemu-$QEMU_VER" ]; then
   curl -fL "https://download.qemu.org/qemu-$QEMU_VER.tar.xz" | tar xJ
 fi
 cd "qemu-$QEMU_VER"
+
+# 清掉上一次失败留下的 meson 构建目录 (缓存的 _work 会带过来)
+rm -rf build
 
 # ---- 2. configure ----
 # 关闭所有可选依赖, 只保留: vnc 显示 / slirp 网络 / virglrenderer GPU
