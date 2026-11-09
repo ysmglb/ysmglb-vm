@@ -79,27 +79,28 @@ meson_dep glib-2.0 https://github.com/GNOME/glib.git 2.80.4 \
     -Dsystemtap=false -Dsysprof=disabled -Dintrospection=disabled
 
 # ---- 2. pixman ----
+# 0.44+ 把 tests/demos 从 bool 改成 combo (enabled/disabled/auto), 不能再传 false
 meson_dep pixman-1 https://gitlab.freedesktop.org/pixman/pixman.git pixman-0.44.2 \
-    -Dtests=false -Ddemos=false -Dlibpng=disabled -Dlibjpeg=disabled -Dgtk=disabled
+    -Dtests=disabled -Ddemos=disabled -Dlibpng=disabled -Dlibjpeg=disabled -Dgtk=disabled
 
 # ---- 3. libslirp (用户态网络 NAT, 无需 root) ----
 meson_dep slirp https://gitlab.freedesktop.org/slirp/libslirp.git v4.8.0
 
 # ---- 4. libdrm (virgl 依赖) ----
 meson_dep libdrm https://gitlab.freedesktop.org/mesa/drm.git libdrm-2.4.123 \
-    -Dtests=false -Damdgpu=disabled -Dnouveau=disabled -Dvmwgfx=disabled \
+    -Dtests=disabled -Damdgpu=disabled -Dnouveau=disabled -Dvmwgfx=disabled \
     -Dradeon=disabled -Dintel=disabled -Dfreedreno=disabled -Detnaviv=disabled
 
 # ---- 5. libepoxy (virgl 依赖: guest GL 调用转发需要 EGL/GLES) ----
 meson_dep epoxy https://github.com/anholt/libepoxy.git 1.5.10 \
-    -Degl=yes -Dglx=no -Dx11=false -Dtests=false
+    -Degl=yes -Dglx=no -Dx11=no -Dtests=disabled
 
 # ---- 6. virglrenderer (virtio-gpu-gl 的宿主侧渲染) ----
 # 若上游 tag 的 meson 选项名有出入, 查看其 meson_options.txt;
 # 备选方案: 直接用 AOSP 带过适配的仓库
 #   https://android.googlesource.com/platform/external/virglrenderer
 meson_dep virglrenderer https://gitlab.freedesktop.org/virgl/virglrenderer.git virglrenderer-1.0.1 \
-    -Dtests=false -Dgbm=disabled -Dminigbm_allocation=false -Dvenus=false
+    -Dtests=disabled -Dgbm=disabled -Dminigbm_allocation=false -Dvenus=false
 
 echo
 echo "依赖库安装完成 → $PREFIX"
