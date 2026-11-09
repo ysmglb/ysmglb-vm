@@ -88,19 +88,20 @@ meson_dep slirp https://gitlab.freedesktop.org/slirp/libslirp.git v4.8.0
 
 # ---- 4. libdrm (virgl 依赖) ----
 meson_dep libdrm https://gitlab.freedesktop.org/mesa/drm.git libdrm-2.4.123 \
-    -Dtests=disabled -Damdgpu=disabled -Dnouveau=disabled -Dvmwgfx=disabled \
+    -Dtests=false -Damdgpu=disabled -Dnouveau=disabled -Dvmwgfx=disabled \
     -Dradeon=disabled -Dintel=disabled -Dfreedreno=disabled -Detnaviv=disabled
 
 # ---- 5. libepoxy (virgl 依赖: guest GL 调用转发需要 EGL/GLES) ----
+# 1.5.10 是老版本: tests/x11 仍是 boolean, egl/glx 是 combo(yes/no/auto)
 meson_dep epoxy https://github.com/anholt/libepoxy.git 1.5.10 \
-    -Degl=yes -Dglx=no -Dx11=no -Dtests=disabled
+    -Degl=yes -Dglx=no -Dx11=false -Dtests=false
 
 # ---- 6. virglrenderer (virtio-gpu-gl 的宿主侧渲染) ----
 # 若上游 tag 的 meson 选项名有出入, 查看其 meson_options.txt;
 # 备选方案: 直接用 AOSP 带过适配的仓库
 #   https://android.googlesource.com/platform/external/virglrenderer
 meson_dep virglrenderer https://gitlab.freedesktop.org/virgl/virglrenderer.git virglrenderer-1.0.1 \
-    -Dtests=disabled -Dgbm=disabled -Dminigbm_allocation=false -Dvenus=false
+    -Dtests=false -Dgbm=disabled -Dminigbm_allocation=false -Dvenus=false
 
 echo
 echo "依赖库安装完成 → $PREFIX"
