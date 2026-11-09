@@ -59,15 +59,19 @@ fi
 meson_dep() {  # meson_dep <name> <git-url> <tag> [extra meson flags...]
   local name=$1 url=$2 tag=$3; shift 3
   if [ -f "$PREFIX/lib/pkgconfig/$name.pc" ] || [ -f "$PREFIX/lib/pkgconfig/${name%-2.0}.pc" ]; then
-    echo "== $name 已安装, 跳过 =="; return
+    echo "==DEP== SKIP  $name (already installed)"; return
   fi
+  echo "==DEP== START $name"
   rm -rf "src-$name"
   git clone --depth 1 --branch "$tag" "$url" "src-$name"
+  echo "==DEP== SETUP $name"
   meson setup "build-$name" "src-$name" \
       --cross-file="$BUILD/cross/android-arm64.ini" \
       --prefix="$PREFIX" --default-library=static --buildtype=release \
       "$@"
+  echo "==DEP== NINJA $name"
   ninja -C "build-$name" install
+  echo "==DEP== DONE  $name"
 }
 
 # ---- 1. glib (QEMU 硬依赖) ----
