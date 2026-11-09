@@ -88,6 +88,8 @@ fi
   --disable-zstd --disable-lzo --disable-snappy --disable-bzip2 --disable-lzfse \
   --disable-gnutls --disable-nettle --disable-gcrypt \
   --disable-seccomp --disable-numa --disable-libusb --disable-libiscsi \
+  --disable-vhost-user --disable-vhost-vdpa --disable-vhost-crypto \
+  --disable-vhost-user-blk-server --disable-vhost-net --disable-vhost-kernel \
   --disable-libnfs --disable-libssh --disable-rbd --disable-glusterfs \
   --disable-attr \
   --extra-cflags="-I$PREFIX/include" \
