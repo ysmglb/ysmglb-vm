@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId = "com.a23.vmm"
-        minSdk = 26
+        minSdk = 28  // 与 NDK 编译目标 API 28 保持一致 (iconv/shm 等符号)
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"

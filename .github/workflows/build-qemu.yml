@@ -92,6 +92,23 @@ jobs:
           path: app/src/main/jniLibs/arm64-v8a/libqemu.so
           if-no-files-found: error
 
+      - name: 成功时把 libqemu.so 发布到 ci-artifact 分支
+        # artifact 下载需要认证 token, 推到分支后本地可直接 raw 下载
+        if: success()
+        run: |
+          cp app/src/main/jniLibs/arm64-v8a/libqemu.so "$RUNNER_TEMP/libqemu.so"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan ci-artifact
+          git rm -rf . >/dev/null 2>&1 || true
+          cp "$RUNNER_TEMP/libqemu.so" libqemu.so
+          printf 'HEAD_SHA=%s\nRUN_URL=%s/%s/actions/runs/%s\nSIZE=%s\n' \
+            "$GITHUB_SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" \
+            "$(stat -c%s libqemu.so)" > INFO.md
+          git add libqemu.so INFO.md
+          git commit -m "artifact: libqemu.so from ${GITHUB_SHA:0:7}"
+          git push --force origin HEAD:ci-artifact
+
       - name: 失败时上传日志
         if: failure()
         uses: actions/upload-artifact@v4
