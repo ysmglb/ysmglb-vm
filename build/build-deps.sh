@@ -79,9 +79,10 @@ meson_dep glib-2.0 https://github.com/GNOME/glib.git 2.80.4 \
     -Dsystemtap=false -Dsysprof=disabled -Dintrospection=disabled
 
 # ---- 2. pixman ----
-# 0.44+ 把 tests/demos 从 bool 改成 combo (enabled/disabled/auto), 不能再传 false
+# 0.44.2 用 meson.options (非 meson_options.txt), tests/demos/libpng/gtk 都是 feature 类型
+# 没有 libjpeg 选项, 之前的 -Dlibjpeg=disabled 直接让 meson setup 报错
 meson_dep pixman-1 https://gitlab.freedesktop.org/pixman/pixman.git pixman-0.44.2 \
-    -Dtests=disabled -Ddemos=disabled -Dlibpng=disabled -Dlibjpeg=disabled -Dgtk=disabled
+    -Dtests=disabled -Ddemos=disabled -Dlibpng=disabled -Dgtk=disabled
 
 # ---- 3. libslirp (用户态网络 NAT, 无需 root) ----
 meson_dep slirp https://gitlab.freedesktop.org/slirp/libslirp.git v4.8.0
